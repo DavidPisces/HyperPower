@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Original V1 H-shaped system buses. -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M29,31L29,77M79,31L79,77M29,54L47,54M61,54L79,54"
+        android:strokeAlpha="0.58"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="4" />
+    <!-- Original V1 diagonal topology. -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M32,32L51,51M76,32L57,51M32,76L51,57M76,76L57,57"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="4" />
+    <!-- Four equal nodes with a reduced telemetry core. -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M29,24A7,7 0,1 1,29,38A7,7 0,1 1,29,24ZM29,70A7,7 0,1 1,29,84A7,7 0,1 1,29,70ZM79,24A7,7 0,1 1,79,38A7,7 0,1 1,79,24ZM79,70A7,7 0,1 1,79,84A7,7 0,1 1,79,70ZM51.5,47L56.5,47C59,47 61,49 61,51.5L61,56.5C61,59 59,61 56.5,61L51.5,61C49,61 47,59 47,56.5L47,51.5C47,49 49,47 51.5,47Z" />
+</vector>

@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DashboardMonitor(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val batteryReader = BatteryReader(appContext)
+    private val memoryReader = MemoryReader(appContext)
     private val cpuSampler = CpuStatSampler()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val resetSampler = AtomicBoolean(false)
@@ -233,6 +234,7 @@ class DashboardMonitor(context: Context) : AutoCloseable {
                 identities = resolveCpuIdentities(cpuSnapshot),
             )
             val battery = batteryReader.read()
+            val memory = memoryReader.read()
             val sampledAtMillis = System.currentTimeMillis()
 
             _state.update { previous ->
@@ -243,7 +245,15 @@ class DashboardMonitor(context: Context) : AutoCloseable {
                         usage = cpu.overallUsage,
                         nowMillis = sampledAtMillis,
                     ),
+                    chargePowerHistory = updateChargePowerHistory(
+                        history = previous.chargePowerHistory,
+                        wasCharging = previous.battery.isCharging,
+                        isCharging = battery.isCharging,
+                        powerWatts = battery.estimatedPowerWatts,
+                        nowMillis = sampledAtMillis,
+                    ),
                     battery = battery,
+                    memory = memory,
                     cpuAccessStatus = if (accessMode == CpuAccessMode.ROOT) {
                         if (cpuSnapshot.source == CpuIdentitySource.ROOT) {
                             CpuAccessStatus.ROOT

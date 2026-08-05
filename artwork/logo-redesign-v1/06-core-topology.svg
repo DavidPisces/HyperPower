@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Core Topology</title>
+  <desc id="desc">Three compute tiers converge on a dominant real-time monitoring core.</desc>
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M25 27v46M75 27v46M25 50h18M57 50h18" opacity=".58"/>
+    <path d="M28 28 47 47M72 28 53 47M28 72l19-19M72 72 53 53"/>
+  </g>
+  <g fill="currentColor">
+    <circle cx="25" cy="27" r="7"/>
+    <circle cx="25" cy="73" r="7"/>
+    <circle cx="75" cy="27" r="7"/>
+    <circle cx="75" cy="73" r="7"/>
+    <rect x="41" y="41" width="18" height="18" rx="6"/>
+  </g>
+</svg>

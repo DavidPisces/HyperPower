@@ -1,9 +1,17 @@
 package com.reiraku.hyperpower.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,13 +40,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BatteryChargingFull
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -45,6 +58,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -62,6 +76,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.reiraku.hyperpower.data.BatteryMetrics
+import com.reiraku.hyperpower.data.CHARGE_POWER_HISTORY_WINDOW_MILLIS
+import com.reiraku.hyperpower.data.ChargePowerSample
 import com.reiraku.hyperpower.data.CpuAccessStatus
 import com.reiraku.hyperpower.data.CpuAccessMode
 import com.reiraku.hyperpower.data.CpuCoreMetric
@@ -71,7 +87,10 @@ import com.reiraku.hyperpower.data.CpuMetrics
 import com.reiraku.hyperpower.data.CPU_LOAD_HISTORY_WINDOW_MILLIS
 import com.reiraku.hyperpower.data.DashboardMonitor
 import com.reiraku.hyperpower.data.DashboardState
+import com.reiraku.hyperpower.data.MemoryMetrics
 import com.reiraku.hyperpower.ui.components.AnimatedMetricNumber
+import com.reiraku.hyperpower.ui.components.HyperBottomBar
+import com.reiraku.hyperpower.ui.components.HyperBottomNavItem
 import com.reiraku.hyperpower.ui.navigation.Route
 import com.reiraku.hyperpower.ui.theme.HyperAmber
 import com.reiraku.hyperpower.ui.theme.HyperBackground
@@ -112,6 +131,7 @@ import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.Text as MiuixText
@@ -120,6 +140,59 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+
+private const val TAB_ENTER_DURATION_MS = 300
+private const val TAB_EXIT_DURATION_MS = 180
+private const val TAB_FADE_IN_DURATION_MS = 210
+private const val TAB_FADE_IN_DELAY_MS = 45
+private const val TAB_FADE_OUT_DURATION_MS = 140
+private const val TAB_ENTER_OFFSET_DIVISOR = 10
+private const val TAB_EXIT_OFFSET_DIVISOR = 14
+
+private val TabEnterEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+private val TabExitEasing = CubicBezierEasing(0.3f, 0f, 1f, 1f)
+
+private enum class DashboardTab {
+    CPU,
+    BATTERY,
+    MEMORY,
+}
+
+private fun AnimatedContentTransitionScope<*>.horizontalContentSlide(
+    forward: Boolean,
+): ContentTransform {
+    val direction = if (forward) 1 else -1
+    return ContentTransform(
+        targetContentEnter = slideInHorizontally(
+            animationSpec = tween(
+                durationMillis = TAB_ENTER_DURATION_MS,
+                easing = TabEnterEasing,
+            ),
+            initialOffsetX = { width -> direction * width / TAB_ENTER_OFFSET_DIVISOR },
+        ) + fadeIn(
+            animationSpec = tween(
+                durationMillis = TAB_FADE_IN_DURATION_MS,
+                delayMillis = TAB_FADE_IN_DELAY_MS,
+                easing = TabEnterEasing,
+            ),
+        ),
+        initialContentExit = slideOutHorizontally(
+            animationSpec = tween(
+                durationMillis = TAB_EXIT_DURATION_MS,
+                easing = TabExitEasing,
+            ),
+            targetOffsetX = { width -> -direction * width / TAB_EXIT_OFFSET_DIVISOR },
+        ) + fadeOut(
+            animationSpec = tween(
+                durationMillis = TAB_FADE_OUT_DURATION_MS,
+                easing = TabExitEasing,
+            ),
+        ),
+        sizeTransform = null,
+    )
+}
 
 @Composable
 fun DashboardRoute(
@@ -231,8 +304,17 @@ fun DashboardScreen(
 ) {
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberMiuixBlurBackdrop()
+    val tabStateHolder = rememberSaveableStateHolder()
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var isRefreshing by remember { mutableStateOf(false) }
     var refreshRequestedAfter by remember { mutableLongStateOf(Long.MAX_VALUE) }
+    val tabs = remember {
+        listOf(
+            HyperBottomNavItem(label = "CPU", icon = Icons.Rounded.Speed),
+            HyperBottomNavItem(label = "电池", icon = Icons.Rounded.BatteryChargingFull),
+            HyperBottomNavItem(label = "内存", icon = Icons.Rounded.Memory),
+        )
+    }
 
     LaunchedEffect(state.updatedAtMillis, isRefreshing, refreshRequestedAfter) {
         if (isRefreshing && state.updatedAtMillis > refreshRequestedAfter) {
@@ -263,143 +345,343 @@ fun DashboardScreen(
                 },
             )
         },
+        bottomBar = {
+            HyperBottomBar(
+                items = tabs,
+                selectedIndex = selectedTabIndex,
+                onSelected = { index ->
+                    if (index in tabs.indices) selectedTabIndex = index
+                },
+                backdrop = backdrop,
+            )
+        },
     ) { innerPadding ->
-        PullToRefresh(
-            isRefreshing = isRefreshing,
-            onRefresh = {
-                if (!isRefreshing) {
-                    refreshRequestedAfter = state.updatedAtMillis
-                    isRefreshing = true
-                    onRefresh()
-                }
-            },
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .then(backdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
-            contentPadding = innerPadding,
-            topAppBarScrollBehavior = scrollBehavior,
-            refreshTexts = listOf("下拉刷新", "释放刷新", "正在刷新", "刷新完成"),
         ) {
-            LazyColumn(
+            AnimatedContent(
+                targetState = selectedTabIndex,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scrollEndHaptic()
-                    .overScrollVertical(),
-                contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding() + 12.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 24.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                overscrollEffect = null,
-            ) {
-                if (!notificationPermissionGranted) {
-                    item {
-                        NotificationPermissionCard(
-                            onRequestPermission = onRequestNotificationPermission,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                }
-
-                if (state.cpuAccessStatus !in listOf(
-                    CpuAccessStatus.DIRECT,
-                    CpuAccessStatus.SHIZUKU,
-                    CpuAccessStatus.ROOT,
-                    CpuAccessStatus.CHECKING,
-                )
-                ) {
-                    item {
-                        AccessCard(
-                            status = state.cpuAccessStatus,
-                            accessMode = state.cpuAccessMode,
-                            onRequestAccess = if (state.cpuAccessMode == CpuAccessMode.ROOT) {
-                                onRequestRoot
-                            } else {
-                                onRequestShizuku
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        )
-                    }
-                }
-
-                item {
-                    CpuOverviewCard(
-                        cpu = state.cpu,
-                        accessStatus = state.cpuAccessStatus,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-
-                item {
-                    CpuLoadHistoryCard(
-                        samples = state.cpuLoadHistory,
-                        windowEndMillis = state.updatedAtMillis,
-                        currentUsage = state.cpu.overallUsage,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-
-                item {
-                    SectionTitle(
-                        eyebrow = "CORE TELEMETRY",
-                        title = "核心状态",
-                        trailing = "${state.cpu.coreCount} 核",
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                    )
-                }
-
-                items(
-                    items = state.cpu.cores.chunked(2),
-                    key = { row -> row.firstOrNull()?.id ?: -1 },
-                ) { rowCores ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        rowCores.forEach { core ->
-                            CoreCard(
-                                core = core,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (rowCores.size == 1) {
-                            Spacer(modifier = Modifier.weight(1f))
+                    .clipToBounds(),
+                transitionSpec = {
+                    horizontalContentSlide(forward = targetState > initialState)
+                },
+                contentKey = { DashboardTab.entries[it] },
+                label = "DashboardTabContentSlide",
+            ) { pageIndex ->
+                tabStateHolder.SaveableStateProvider(pageIndex) {
+                    val requestRefresh = {
+                        if (!isRefreshing) {
+                            refreshRequestedAfter = state.updatedAtMillis
+                            isRefreshing = true
+                            onRefresh()
                         }
                     }
-                }
-
-                item {
-                    BatteryCard(
-                        battery = state.battery,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
-
-                item {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                    ) {
-                        Text(
-                            text = if (state.cpuAccessMode == CpuAccessMode.ROOT) {
-                                "采样间隔 1 秒 · Root 只读采集 CPU 系统节点"
-                            } else {
-                                "采样间隔 1 秒 · Shizuku 采集 Linux 调度统计"
-                            },
-                            color = HyperOnSurfaceMuted,
-                            style = MaterialTheme.typography.labelSmall,
+                    when (DashboardTab.entries[pageIndex]) {
+                        DashboardTab.CPU -> CpuDashboardPage(
+                            state = state,
+                            notificationPermissionGranted = notificationPermissionGranted,
+                            onRequestNotificationPermission = onRequestNotificationPermission,
+                            onRequestShizuku = onRequestShizuku,
+                            onRequestRoot = onRequestRoot,
+                            isRefreshing = isRefreshing,
+                            onRefresh = requestRefresh,
+                            contentPadding = innerPadding,
+                            scrollBehavior = scrollBehavior,
                         )
-                        Spacer(modifier = Modifier.height(3.dp))
-                        MiuixText(
-                            text = "上次刷新 · ${formatUpdateTime(state.updatedAtMillis)}",
-                            color = HyperOnSurfaceMuted,
-                            style = MiuixTheme.textStyles.footnote2,
+
+                        DashboardTab.BATTERY -> BatteryDashboardPage(
+                            state = state,
+                            isRefreshing = isRefreshing,
+                            onRefresh = requestRefresh,
+                            contentPadding = innerPadding,
+                            scrollBehavior = scrollBehavior,
+                        )
+
+                        DashboardTab.MEMORY -> MemoryDashboardPage(
+                            state = state,
+                            isRefreshing = isRefreshing,
+                            onRefresh = requestRefresh,
+                            contentPadding = innerPadding,
+                            scrollBehavior = scrollBehavior,
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CpuDashboardPage(
+    state: DashboardState,
+    notificationPermissionGranted: Boolean,
+    onRequestNotificationPermission: () -> Unit,
+    onRequestShizuku: () -> Unit,
+    onRequestRoot: () -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    contentPadding: PaddingValues,
+    scrollBehavior: ScrollBehavior,
+) {
+    DashboardTabPage(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        contentPadding = contentPadding,
+        scrollBehavior = scrollBehavior,
+    ) {
+        if (!notificationPermissionGranted) {
+            item {
+                NotificationPermissionCard(
+                    onRequestPermission = onRequestNotificationPermission,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+
+        if (state.cpuAccessStatus !in listOf(
+            CpuAccessStatus.DIRECT,
+            CpuAccessStatus.SHIZUKU,
+            CpuAccessStatus.ROOT,
+            CpuAccessStatus.CHECKING,
+        )
+        ) {
+            item {
+                AccessCard(
+                    status = state.cpuAccessStatus,
+                    accessMode = state.cpuAccessMode,
+                    onRequestAccess = if (state.cpuAccessMode == CpuAccessMode.ROOT) {
+                        onRequestRoot
+                    } else {
+                        onRequestShizuku
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
+
+        item {
+            DashboardSection(
+                eyebrow = "CPU",
+                title = "处理器负载",
+                trailing = { SourcePill(state.cpuAccessStatus) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                CpuOverviewCard(cpu = state.cpu)
+            }
+        }
+
+        item {
+            DashboardSection(
+                eyebrow = "CPU LOAD",
+                title = "最近 30 秒",
+                trailing = { CurrentCpuLoad(state.cpu.overallUsage) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                CpuLoadHistoryCard(
+                    samples = state.cpuLoadHistory,
+                    windowEndMillis = state.updatedAtMillis,
+                    currentUsage = state.cpu.overallUsage,
+                )
+            }
+        }
+
+        item {
+            SectionTitle(
+                eyebrow = "CORE TELEMETRY",
+                title = "核心状态",
+                trailing = "${state.cpu.coreCount} 核",
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+            )
+        }
+
+        items(
+            items = state.cpu.cores.chunked(2),
+            key = { row -> row.firstOrNull()?.id ?: -1 },
+        ) { rowCores ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                rowCores.forEach { core ->
+                    CoreCard(
+                        core = core,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (rowCores.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+
+        item {
+            MonitorFooter(
+                description = if (state.cpuAccessMode == CpuAccessMode.ROOT) {
+                    "采样间隔 1 秒 · Root 只读采集 CPU 系统节点"
+                } else {
+                    "采样间隔 1 秒 · Shizuku 采集 Linux 调度统计"
+                },
+                updatedAtMillis = state.updatedAtMillis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BatteryDashboardPage(
+    state: DashboardState,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    contentPadding: PaddingValues,
+    scrollBehavior: ScrollBehavior,
+) {
+    DashboardTabPage(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        contentPadding = contentPadding,
+        scrollBehavior = scrollBehavior,
+    ) {
+        item {
+            DashboardSection(
+                eyebrow = "BATTERY",
+                title = "电池状态",
+                trailing = { BatteryStatusPill(state.battery) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                BatteryCard(battery = state.battery)
+            }
+        }
+        item {
+            val currentPowerWatts = if (state.battery.isCharging) {
+                state.battery.estimatedPowerWatts
+            } else {
+                null
+            }
+            DashboardSection(
+                eyebrow = "CHARGE POWER",
+                title = "充电功率曲线",
+                trailing = {
+                    ChargePowerSummary(
+                        samples = state.chargePowerHistory,
+                        isCharging = state.battery.isCharging,
+                        currentPowerWatts = currentPowerWatts,
+                    )
+                },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                ChargePowerHistoryCard(
+                    samples = state.chargePowerHistory,
+                    isCharging = state.battery.isCharging,
+                    currentPowerWatts = currentPowerWatts,
+                )
+            }
+        }
+        item {
+            MonitorFooter(
+                description = "采样间隔 1 秒 · Android 电池管理器实时统计",
+                updatedAtMillis = state.updatedAtMillis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MemoryDashboardPage(
+    state: DashboardState,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    contentPadding: PaddingValues,
+    scrollBehavior: ScrollBehavior,
+) {
+    DashboardTabPage(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        contentPadding = contentPadding,
+        scrollBehavior = scrollBehavior,
+    ) {
+        item {
+            DashboardSection(
+                eyebrow = "MEMORY",
+                title = "内存状态",
+                trailing = { MemoryStatusPill(state.memory) },
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                MemoryOverviewCard(memory = state.memory)
+            }
+        }
+        item {
+            DashboardSection(
+                eyebrow = "RAM DETAILS",
+                title = "内存详情",
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                MemoryDetailsCard(memory = state.memory)
+            }
+        }
+        item {
+            MonitorFooter(
+                description = "采样间隔 1 秒 · 系统 ActivityManager 内存统计",
+                updatedAtMillis = state.updatedAtMillis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DashboardTabPage(
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    contentPadding: PaddingValues,
+    scrollBehavior: ScrollBehavior,
+    content: LazyListScope.() -> Unit,
+) {
+    PullToRefresh(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+        topAppBarScrollBehavior = scrollBehavior,
+        refreshTexts = listOf("下拉刷新", "释放刷新", "正在刷新", "刷新完成"),
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .scrollEndHaptic()
+                .overScrollVertical(),
+            contentPadding = PaddingValues(
+                top = contentPadding.calculateTopPadding() + 12.dp,
+                bottom = contentPadding.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            overscrollEffect = null,
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun MonitorFooter(
+    description: String,
+    updatedAtMillis: Long,
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = description,
+            color = HyperOnSurfaceMuted,
+            style = MaterialTheme.typography.labelSmall,
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        MiuixText(
+            text = "上次刷新 · ${formatUpdateTime(updatedAtMillis)}",
+            color = HyperOnSurfaceMuted,
+            style = MiuixTheme.textStyles.footnote2,
+        )
     }
 }
 
@@ -512,15 +794,9 @@ private fun AccessCard(
 @Composable
 private fun CpuOverviewCard(
     cpu: CpuMetrics,
-    accessStatus: CpuAccessStatus,
     modifier: Modifier = Modifier,
 ) {
     MetricCard(
-        eyebrow = "CPU",
-        title = "处理器负载",
-        trailing = {
-            SourcePill(accessStatus)
-        },
         modifier = modifier,
     ) {
         Row(
@@ -566,50 +842,6 @@ private fun CpuLoadHistoryCard(
 
     Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "CPU LOAD",
-                        color = HyperOnSurfaceMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.5.sp,
-                    )
-                    Text(
-                        text = "最近 30 秒",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MiuixTheme.textStyles.title4,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                if (currentUsage == null) {
-                    MiuixText(
-                        text = "—",
-                        color = HyperOnSurfaceMuted,
-                        style = MiuixTheme.textStyles.title4,
-                    )
-                } else {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        AnimatedMetricNumber(
-                            value = (currentUsage * 100).roundToInt(),
-                            style = MiuixTheme.textStyles.title4,
-                            color = lineColor,
-                            animationLabel = "cpu-history-current-load",
-                        )
-                        MiuixText(
-                            text = "%",
-                            color = lineColor.copy(alpha = 0.82f),
-                            style = MiuixTheme.textStyles.footnote2,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 1.dp, bottom = 1.dp),
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
             CpuLoadChart(
                 samples = samples,
                 windowEndMillis = windowEndMillis,
@@ -804,6 +1036,284 @@ private fun CpuLoadChart(
 }
 
 @Composable
+private fun ChargePowerHistoryCard(
+    samples: List<ChargePowerSample>,
+    isCharging: Boolean,
+    currentPowerWatts: Double?,
+    modifier: Modifier = Modifier,
+) {
+    val peakPower = samples.maxOfOrNull(ChargePowerSample::powerWatts)
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MiuixText(
+                    text = "最近 5 分钟",
+                    color = HyperOnSurfaceMuted,
+                    style = MiuixTheme.textStyles.footnote2,
+                    modifier = Modifier.weight(1f),
+                )
+                MiuixText(
+                    text = peakPower?.let { "峰值 ${formatDecimal(it, 2)} W" } ?: "等待数据",
+                    color = HyperOnSurfaceMuted,
+                    style = MiuixTheme.textStyles.footnote2,
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            ChargePowerChart(
+                samples = samples,
+                isCharging = isCharging,
+                currentPowerWatts = currentPowerWatts,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChargePowerChart(
+    samples: List<ChargePowerSample>,
+    isCharging: Boolean,
+    currentPowerWatts: Double?,
+    modifier: Modifier = Modifier,
+) {
+    val lastSampleTime = samples.lastOrNull()?.timestampMillis
+    var displayedEndMillis by remember {
+        mutableLongStateOf(lastSampleTime ?: System.currentTimeMillis())
+    }
+    val animatedCurrentPower by animateFloatAsState(
+        targetValue = (currentPowerWatts ?: samples.lastOrNull()?.powerWatts ?: 0.0).toFloat(),
+        animationSpec = tween(durationMillis = 900, easing = LinearEasing),
+        label = "charge-power-latest-value",
+    )
+    val animatedScaleMaximum by animateFloatAsState(
+        targetValue = chargePowerScaleMaximum(samples, currentPowerWatts).toFloat(),
+        animationSpec = tween(durationMillis = 450),
+        label = "charge-power-scale",
+    )
+
+    LaunchedEffect(isCharging, lastSampleTime) {
+        if (!isCharging) {
+            displayedEndMillis = lastSampleTime ?: System.currentTimeMillis()
+        }
+    }
+    LaunchedEffect(isCharging) {
+        if (!isCharging) return@LaunchedEffect
+        var previousUpdateNanos = 0L
+        while (true) {
+            withFrameNanos { frameTimeNanos ->
+                if (previousUpdateNanos == 0L ||
+                    frameTimeNanos - previousUpdateNanos >= CHART_FRAME_INTERVAL_NANOS
+                ) {
+                    displayedEndMillis = System.currentTimeMillis()
+                    previousUpdateNanos = frameTimeNanos
+                }
+            }
+        }
+    }
+
+    val scaleMaximum = animatedScaleMaximum.coerceAtLeast(1f)
+    val gridColor = HyperOutline
+    val lineColor = HyperGreen
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .width(42.dp)
+                    .height(112.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                PowerScaleLabel(scaleMaximum.toDouble())
+                PowerScaleLabel(scaleMaximum.toDouble() / 2.0)
+                PowerScaleLabel(0.0)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(112.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val topInset = 4.dp.toPx()
+                    val bottomInset = 4.dp.toPx()
+                    val chartHeight = size.height - topInset - bottomInset
+
+                    listOf(0f, 0.5f, 1f).forEach { level ->
+                        val y = topInset + chartHeight * level
+                        drawLine(
+                            color = gridColor.copy(alpha = if (level == 0.5f) 0.48f else 0.32f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width, y),
+                            strokeWidth = 1.dp.toPx(),
+                        )
+                    }
+
+                    val windowStartMillis =
+                        displayedEndMillis - CHARGE_POWER_HISTORY_WINDOW_MILLIS
+                    val chartWidth = size.width
+                    val visibleSamples = samples.filter {
+                        it.timestampMillis >= windowStartMillis &&
+                            it.timestampMillis <= displayedEndMillis
+                    }
+                    val points = buildList {
+                        visibleSamples.forEachIndexed { index, sample ->
+                            val elapsed = sample.timestampMillis - windowStartMillis
+                            val power = if (index == visibleSamples.lastIndex) {
+                                animatedCurrentPower.toDouble()
+                            } else {
+                                sample.powerWatts
+                            }
+                            add(
+                                Offset(
+                                    x = elapsed.toFloat() /
+                                        CHARGE_POWER_HISTORY_WINDOW_MILLIS.toFloat() * chartWidth,
+                                    y = topInset +
+                                        (1f - (power / scaleMaximum).toFloat().coerceIn(0f, 1f)) *
+                                        chartHeight,
+                                ),
+                            )
+                        }
+                        if (isCharging && visibleSamples.isNotEmpty()) {
+                            add(
+                                Offset(
+                                    x = chartWidth,
+                                    y = topInset +
+                                        (1f - (animatedCurrentPower / scaleMaximum).coerceIn(0f, 1f)) *
+                                        chartHeight,
+                                ),
+                            )
+                        }
+                    }
+
+                    if (points.isNotEmpty()) {
+                        val linePath = Path().apply {
+                            moveTo(points.first().x, points.first().y)
+                            points.zipWithNext().forEach { (previous, current) ->
+                                val controlX = (previous.x + current.x) / 2f
+                                cubicTo(
+                                    controlX,
+                                    previous.y,
+                                    controlX,
+                                    current.y,
+                                    current.x,
+                                    current.y,
+                                )
+                            }
+                        }
+                        val fillPath = Path().apply {
+                            moveTo(points.first().x, size.height)
+                            lineTo(points.first().x, points.first().y)
+                            points.zipWithNext().forEach { (previous, current) ->
+                                val controlX = (previous.x + current.x) / 2f
+                                cubicTo(
+                                    controlX,
+                                    previous.y,
+                                    controlX,
+                                    current.y,
+                                    current.x,
+                                    current.y,
+                                )
+                            }
+                            lineTo(points.last().x, size.height)
+                            close()
+                        }
+
+                        clipRect {
+                            drawPath(
+                                path = fillPath,
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        lineColor.copy(alpha = 0.22f),
+                                        lineColor.copy(alpha = 0.015f),
+                                    ),
+                                    startY = topInset,
+                                    endY = size.height,
+                                ),
+                            )
+                            drawPath(
+                                path = linePath,
+                                color = lineColor,
+                                style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round),
+                            )
+                            points.lastOrNull()
+                                ?.takeIf { it.x in 0f..size.width }
+                                ?.let { latest ->
+                                    drawCircle(
+                                        color = lineColor.copy(alpha = 0.20f),
+                                        radius = 6.dp.toPx(),
+                                        center = latest,
+                                    )
+                                    drawCircle(
+                                        color = lineColor,
+                                        radius = 2.6.dp.toPx(),
+                                        center = latest,
+                                    )
+                                }
+                        }
+                    }
+                }
+
+                if (samples.isEmpty()) {
+                    MiuixText(
+                        text = if (isCharging) {
+                            "正在收集充电功率"
+                        } else {
+                            "检测到充电后开始记录"
+                        },
+                        color = HyperOnSurfaceMuted,
+                        style = MiuixTheme.textStyles.footnote2,
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 50.dp),
+        ) {
+            MiuixText(
+                text = "−5m",
+                color = HyperOnSurfaceMuted,
+                style = MiuixTheme.textStyles.footnote2,
+                modifier = Modifier.weight(1f),
+            )
+            MiuixText(
+                text = if (!isCharging && samples.isNotEmpty()) "充电结束" else "现在",
+                color = HyperOnSurfaceMuted,
+                style = MiuixTheme.textStyles.footnote2,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PowerScaleLabel(value: Double) {
+    val decimals = if (value % 1.0 == 0.0) 0 else 1
+    MiuixText(
+        text = "${formatDecimal(value, decimals)} W",
+        color = HyperOnSurfaceMuted,
+        style = MiuixTheme.textStyles.footnote2.copy(fontSize = 9.sp),
+    )
+}
+
+private fun chargePowerScaleMaximum(
+    samples: List<ChargePowerSample>,
+    currentPowerWatts: Double?,
+): Double {
+    val observedMaximum = maxOf(
+        samples.maxOfOrNull(ChargePowerSample::powerWatts) ?: 0.0,
+        currentPowerWatts ?: 0.0,
+    )
+    return maxOf(5.0, kotlin.math.ceil(observedMaximum * 1.1 / 5.0) * 5.0)
+}
+
+@Composable
 private fun CoreCard(
     core: CpuCoreMetric,
     modifier: Modifier = Modifier,
@@ -924,23 +1434,101 @@ private fun CoreTag(
 }
 
 @Composable
+private fun MemoryOverviewCard(
+    memory: MemoryMetrics,
+    modifier: Modifier = Modifier,
+) {
+    val usage = memory.usage
+    val color = memoryUsageColor(usage, memory.isLowMemory)
+    MetricCard(
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            UsageRing(
+                progress = usage,
+                color = color,
+                label = "内存占用",
+            )
+            Spacer(modifier = Modifier.width(22.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                InlineMetric(
+                    label = "可用内存",
+                    value = formatMemoryValue(memory.availableBytes),
+                    unit = memoryUnit(memory.availableBytes),
+                )
+                HorizontalDivider(color = HyperOutline)
+                InlineMetric(
+                    label = "已用内存",
+                    value = formatMemoryValue(memory.usedBytes),
+                    unit = memoryUnit(memory.usedBytes),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoryDetailsCard(
+    memory: MemoryMetrics,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MetricTile(
+                    label = "物理内存",
+                    value = formatMemoryValue(memory.totalBytes),
+                    unit = memoryUnit(memory.totalBytes),
+                    accent = HyperCyan,
+                    modifier = Modifier.weight(1f),
+                )
+                MetricTile(
+                    label = "当前占用",
+                    value = formatMemoryValue(memory.usedBytes),
+                    unit = memoryUnit(memory.usedBytes),
+                    accent = memoryUsageColor(memory.usage, memory.isLowMemory),
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MetricTile(
+                    label = "当前可用",
+                    value = formatMemoryValue(memory.availableBytes),
+                    unit = memoryUnit(memory.availableBytes),
+                    accent = HyperGreen,
+                    modifier = Modifier.weight(1f),
+                )
+                MetricTile(
+                    label = "低内存阈值",
+                    value = formatMemoryValue(memory.lowMemoryThresholdBytes),
+                    unit = memoryUnit(memory.lowMemoryThresholdBytes),
+                    accent = HyperAmber,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun BatteryCard(
     battery: BatteryMetrics,
     modifier: Modifier = Modifier,
 ) {
     MetricCard(
-        eyebrow = "BATTERY",
-        title = "电池状态",
-        trailing = {
-            StatusPill(
-                text = when {
-                    battery.isCharging -> "充电中"
-                    battery.isPowerConnected -> "已接电源"
-                    else -> "正在放电"
-                },
-                color = if (battery.isCharging) HyperGreen else HyperAmber,
-            )
-        },
         modifier = modifier,
     ) {
         Row(
@@ -980,14 +1568,14 @@ private fun BatteryCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            BatteryMetricTile(
+            MetricTile(
                 label = "电压",
                 value = battery.voltageMv?.let { formatDecimal(it / 1_000.0, 2) } ?: "—",
                 unit = "V",
                 accent = HyperGreen,
                 modifier = Modifier.weight(1f),
             )
-            BatteryMetricTile(
+            MetricTile(
                 label = "当前电流",
                 value = formatCurrent(battery.currentUa),
                 unit = "mA",
@@ -1002,14 +1590,14 @@ private fun BatteryCard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            BatteryMetricTile(
+            MetricTile(
                 label = "剩余电荷",
                 value = battery.chargeUah?.let { formatDecimal(it / 1_000.0, 0) } ?: "—",
                 unit = "mAh",
                 accent = HyperGreen,
                 modifier = Modifier.weight(1f),
             )
-            BatteryMetricTile(
+            MetricTile(
                 label = "电池温度",
                 value = battery.temperatureCelsius?.let { formatDecimal(it.toDouble(), 1) } ?: "—",
                 unit = "°C",
@@ -1022,9 +1610,6 @@ private fun BatteryCard(
 
 @Composable
 private fun MetricCard(
-    eyebrow: String,
-    title: String,
-    trailing: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -1032,25 +1617,6 @@ private fun MetricCard(
         modifier = modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = eyebrow,
-                        color = HyperOnSurfaceMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.6.sp,
-                    )
-                    Text(
-                        text = title,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                trailing()
-            }
-            Spacer(modifier = Modifier.height(20.dp))
             content()
         }
     }
@@ -1233,7 +1799,7 @@ private fun AnimatedFrequencyMetric(
 }
 
 @Composable
-private fun BatteryMetricTile(
+private fun MetricTile(
     label: String,
     value: String,
     unit: String,
@@ -1280,6 +1846,121 @@ private fun BatteryMetricTile(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DashboardSection(
+    eyebrow: String,
+    title: String,
+    modifier: Modifier = Modifier,
+    trailing: @Composable () -> Unit = {},
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = eyebrow,
+                    color = HyperOnSurfaceMuted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.5.sp,
+                )
+                Text(
+                    text = title,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            trailing()
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        content()
+    }
+}
+
+@Composable
+private fun CurrentCpuLoad(usage: Float?) {
+    val color = usageColor(usage ?: 0f)
+    if (usage == null) {
+        MiuixText(
+            text = "—",
+            color = HyperOnSurfaceMuted,
+            style = MiuixTheme.textStyles.title4,
+        )
+    } else {
+        Row(verticalAlignment = Alignment.Bottom) {
+            AnimatedMetricNumber(
+                value = (usage * 100).roundToInt(),
+                style = MiuixTheme.textStyles.title4,
+                color = color,
+                animationLabel = "cpu-history-current-load",
+            )
+            MiuixText(
+                text = "%",
+                color = color.copy(alpha = 0.82f),
+                style = MiuixTheme.textStyles.footnote2,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 1.dp, bottom = 1.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BatteryStatusPill(battery: BatteryMetrics) {
+    StatusPill(
+        text = when {
+            battery.isCharging -> "充电中"
+            battery.isPowerConnected -> "已接电源"
+            else -> "正在放电"
+        },
+        color = if (battery.isCharging) HyperGreen else HyperAmber,
+    )
+}
+
+@Composable
+private fun MemoryStatusPill(memory: MemoryMetrics) {
+    StatusPill(
+        text = when {
+            memory.isLowMemory -> "内存紧张"
+            memory.totalBytes != null -> "运行正常"
+            else -> "检测中"
+        },
+        color = memoryUsageColor(memory.usage, memory.isLowMemory),
+    )
+}
+
+@Composable
+private fun ChargePowerSummary(
+    samples: List<ChargePowerSample>,
+    isCharging: Boolean,
+    currentPowerWatts: Double?,
+) {
+    val displayedPower = currentPowerWatts ?: samples.lastOrNull()?.powerWatts
+    Column(horizontalAlignment = Alignment.End) {
+        Text(
+            text = displayedPower?.let { "${formatDecimal(it, 2)} W" } ?: "—",
+            color = if (isCharging) HyperGreen else HyperOnSurfaceMuted,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        MiuixText(
+            text = when {
+                isCharging -> "实时功率"
+                samples.isNotEmpty() -> "末次功率"
+                else -> "等待充电"
+            },
+            color = HyperOnSurfaceMuted,
+            style = MiuixTheme.textStyles.footnote2,
+        )
     }
 }
 
@@ -1372,6 +2053,14 @@ private fun batteryLevelColor(level: Int?): Color = when {
     else -> HyperGreen
 }
 
+@Composable
+private fun memoryUsageColor(usage: Float?, isLowMemory: Boolean): Color = when {
+    usage == null -> HyperOnSurfaceMuted
+    isLowMemory || usage >= 0.90f -> HyperRed
+    usage >= 0.75f -> HyperAmber
+    else -> HyperGreen
+}
+
 private fun formatFrequency(frequencyKhz: Long?): String {
     frequencyKhz ?: return "—"
     return if (frequencyKhz >= 1_000_000L) {
@@ -1398,6 +2087,18 @@ private fun formatCurrent(currentUa: Long?): String {
     return prefix + formatDecimal(abs(currentMa), 0)
 }
 
+private fun formatMemoryValue(bytes: Long?): String {
+    bytes ?: return "—"
+    return if (bytes >= BYTES_PER_GIBIBYTE) {
+        formatDecimal(bytes / BYTES_PER_GIBIBYTE.toDouble(), 2)
+    } else {
+        formatDecimal(bytes / BYTES_PER_MEBIBYTE.toDouble(), 0)
+    }
+}
+
+private fun memoryUnit(bytes: Long?): String =
+    if (bytes != null && bytes >= BYTES_PER_GIBIBYTE) "GB" else "MB"
+
 private fun formatDuration(durationMillis: Long?): String {
     durationMillis ?: return "—"
     val totalMinutes = durationMillis / 60_000L
@@ -1418,10 +2119,13 @@ private fun formatUpdateTime(timestamp: Long): String =
     SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
 
 private const val CHART_FRAME_INTERVAL_NANOS = 32_000_000L
+private const val BYTES_PER_MEBIBYTE = 1_024L * 1_024L
+private const val BYTES_PER_GIBIBYTE = 1_024L * BYTES_PER_MEBIBYTE
 
 @Preview(showBackground = true, backgroundColor = 0xFF071012)
 @Composable
 private fun DashboardPreview() {
+    val now = System.currentTimeMillis()
     HyperPowerTheme {
         DashboardScreen(
             state = DashboardState(
@@ -1447,18 +2151,29 @@ private fun DashboardPreview() {
                 ),
                 cpuLoadHistory = List(30) { index ->
                     CpuLoadSample(
-                        timestampMillis = System.currentTimeMillis() -
-                            (29 - index) * 1_000L,
+                        timestampMillis = now - (29 - index) * 1_000L,
                         usage = (0.32f + (index % 7) * 0.045f).coerceAtMost(1f),
+                    )
+                },
+                chargePowerHistory = List(60) { index ->
+                    ChargePowerSample(
+                        timestampMillis = now - (59 - index) * 1_000L,
+                        powerWatts = 42.0 + (index % 9) * 0.85,
                     )
                 },
                 battery = BatteryMetrics(
                     levelPercent = 76,
                     voltageMv = 4_087,
-                    currentUa = -482_000,
+                    currentUa = 12_200_000,
                     chargeUah = 3_640_000,
-                    estimatedRemainingMillis = 7L * 60L * 60L * 1_000L + 22L * 60L * 1_000L,
                     temperatureCelsius = 32.6f,
+                    isCharging = true,
+                    isPowerConnected = true,
+                ),
+                memory = MemoryMetrics(
+                    totalBytes = 16L * BYTES_PER_GIBIBYTE,
+                    availableBytes = 5L * BYTES_PER_GIBIBYTE,
+                    lowMemoryThresholdBytes = 1L * BYTES_PER_GIBIBYTE,
                 ),
                 cpuAccessStatus = CpuAccessStatus.SHIZUKU,
             ),

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">HyperPower — The Void</title>
+  <desc id="desc">The Core Topology logo presented in an absolute black technical environment.</desc>
+  <defs>
+    <filter id="noise" x="0" y="0" width="100%" height="100%">
+      <feTurbulence baseFrequency=".72" numOctaves="3" seed="11" type="fractalNoise"/>
+      <feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .055 0"/>
+    </filter>
+    <radialGradient id="corner" cx="0" cy="0" r="1">
+      <stop stop-color="#173A3E" stop-opacity=".7"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <g id="mark" color="#F8FCFB">
+      <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M25 27v46M75 27v46M25 50h18M57 50h18" opacity=".58"/>
+        <path d="M28 28 47 47M72 28 53 47M28 72l19-19M72 72 53 53"/>
+      </g>
+      <g fill="currentColor"><circle cx="25" cy="27" r="7"/><circle cx="25" cy="73" r="7"/><circle cx="75" cy="27" r="7"/><circle cx="75" cy="73" r="7"/><rect x="43" y="43" width="14" height="14" rx="4.5"/></g>
+    </g>
+  </defs>
+  <rect width="1600" height="900" fill="#000"/>
+  <rect width="980" height="720" fill="url(#corner)" opacity=".7"/>
+  <rect width="1600" height="900" filter="url(#noise)" opacity=".6"/>
+  <circle cx="800" cy="445" r="260" fill="#53D7F4" opacity=".025"/>
+  <g transform="translate(550 195) scale(5)"><use href="#mark"/></g>
+  <g fill="#D8E2DF" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="64" y="72" font-family="ui-monospace, Menlo, monospace" font-size="14" font-weight="700" letter-spacing="4">HYPERPOWER / CORE TOPOLOGY</text>
+    <text x="1536" y="72" text-anchor="end" fill="#63716F" font-family="ui-monospace, Menlo, monospace" font-size="13" letter-spacing="3">V1.0 // 2026</text>
+    <text x="800" y="842" text-anchor="middle" fill="#63716F" font-family="ui-monospace, Menlo, monospace" font-size="13" letter-spacing="4">REAL-TIME DEVICE TELEMETRY</text>
+  </g>
+</svg>

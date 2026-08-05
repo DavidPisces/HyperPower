@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HyperPower — Core Topology Identity</title>
+  <style>
+    :root { color-scheme: dark; --bg:#071012; --surface:#101b1e; --line:#2a3a3e; --text:#f0f6f4; --muted:#9dadaa; --cyan:#53d7f4; --green:#b8f25a; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--text); background:radial-gradient(circle at 18% 0%,#173a3e 0,transparent 34rem),var(--bg); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    header,main,footer { width:min(1240px,calc(100% - 40px)); margin:auto; }
+    header { padding:72px 0 46px; }
+    .eyebrow,.meta,footer { font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.17em; text-transform:uppercase; }
+    .eyebrow { color:var(--cyan); }
+    h1 { margin:14px 0 10px; font-size:clamp(52px,9vw,104px); font-weight:280; letter-spacing:-.065em; }
+    header p { max-width:760px; margin:0; color:var(--muted); font-size:17px; line-height:1.75; }
+    .hero { display:flex; align-items:center; gap:28px; margin-top:38px; padding:24px; border:1px solid var(--line); border-radius:24px; background:rgba(16,27,30,.76); }
+    .hero img { width:112px; height:112px; padding:10px; border-radius:28px; background:#071012; }
+    .hero strong { display:block; font-size:28px; }
+    .hero span { color:var(--muted); }
+    .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:22px; padding-bottom:70px; }
+    article { overflow:hidden; border:1px solid var(--line); border-radius:24px; background:var(--surface); transition:.45s cubic-bezier(.16,1,.3,1); }
+    article:hover { transform:translateY(-5px); border-color:#4b6e68; }
+    article img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:#030708; }
+    .copy { padding:22px 24px 26px; }
+    .meta { color:var(--cyan); }
+    h2 { margin:9px 0 7px; font-size:24px; }
+    .copy p { margin:0; color:var(--muted); line-height:1.65; }
+    .downloads { display:flex; flex-wrap:wrap; gap:12px; margin-top:28px; }
+    a { color:var(--text); text-decoration:none; }
+    .downloads a { padding:10px 14px; border:1px solid var(--line); border-radius:999px; font-size:13px; }
+    .downloads a:hover { border-color:var(--green); color:var(--green); }
+    footer { padding-bottom:48px; color:var(--muted); }
+    @media(max-width:720px){ .grid{grid-template-columns:1fr}.hero{align-items:flex-start}.hero img{width:88px;height:88px} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Selected identity / direction 06</div>
+    <h1>Core Topology</h1>
+    <p>回到 v1 第 6 号的四节点结构：等权节点、双纵向总线与交叉连接共同形成 H。中央实时采样核心进一步缩小，让负空间更充足；生产图标采用纯白底与纯黑图形。</p>
+    <div class="hero">
+      <img src="hyperpower-app-icon.svg" alt="HyperPower Core Topology app icon" />
+      <div><strong>HyperPower</strong><span>Real-time device telemetry</span>
+        <div class="downloads"><a href="hyperpower-symbol.svg" download>下载透明 SVG</a><a href="hyperpower-app-icon.svg" download>下载 App Icon SVG</a><a href="png/hyperpower-symbol-1024.png" download>下载 1024 PNG</a></div>
+      </div>
+    </div>
+  </header>
+  <main class="grid">
+    <article><img src="showcase/01-void.svg" alt="The Void showcase"/><div class="copy"><span class="meta">01 / Dark rational</span><h2>The Void</h2><p>绝对黑与微弱冷光强化系统工具的深层访问感，并验证白色单色标志。</p></div></article>
+    <article><img src="showcase/02-led-matrix.svg" alt="LED Matrix showcase"/><div class="copy"><span class="meta">02 / Digital hardware</span><h2>LED Matrix</h2><p>点阵波形对应 CPU 核心、采样频率与持续遥测，是最贴合硬件语境的展示方向。</p></div></article>
+    <article><img src="showcase/03-clinical-studio.svg" alt="Clinical Studio showcase"/><div class="copy"><span class="meta">03 / Light precise</span><h2>Clinical Studio</h2><p>高对比冷白空间验证结构秩序、单色主题图标和浅色背景适应性。</p></div></article>
+    <article><img src="showcase/04-ui-container.svg" alt="UI Container showcase"/><div class="copy"><span class="meta">04 / Product native</span><h2>UI Container</h2><p>把白底黑标放回 Android 自适应图标语境，验证实际产品中的圆角遮罩和视觉留白。</p></div></article>
+  </main>
+  <footer>HyperPower identity system · currentColor SVG · adaptive icon · monochrome ready</footer>
+</body>
+</html>

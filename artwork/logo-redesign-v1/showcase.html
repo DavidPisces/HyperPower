@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HyperPower — Logo Design Exploration</title>
+  <style>
+    :root {
+      --bg: #071012;
+      --surface: #101b1e;
+      --surface-high: #172529;
+      --outline: #2a3a3e;
+      --text: #f0f6f4;
+      --muted: #9dadaa;
+      --cyan: #53d7f4;
+      --green: #b8f25a;
+      --mark: #f0f6f4;
+      --logo-size: 132px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 0%, rgba(83, 215, 244, .13), transparent 31rem),
+        radial-gradient(circle at 88% 20%, rgba(184, 242, 90, .09), transparent 28rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      content: "";
+      pointer-events: none;
+      opacity: .12;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E");
+    }
+
+    header, main, footer { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+
+    header { padding: 78px 0 44px; }
+
+    .eyebrow, .index, .meta, .control-label, footer {
+      font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow { color: var(--cyan); }
+
+    h1 { margin: 16px 0 10px; font-size: clamp(48px, 9vw, 104px); font-weight: 280; letter-spacing: -.065em; }
+
+    .tagline { max-width: 720px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px 28px;
+      align-items: center;
+      margin-top: 38px;
+      padding: 18px 20px;
+      border: 1px solid var(--outline);
+      border-radius: 18px;
+      background: rgba(16, 27, 30, .7);
+      backdrop-filter: blur(18px);
+    }
+
+    .control { display: flex; gap: 10px; align-items: center; }
+    .control-label { color: var(--muted); }
+
+    button {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 999px;
+      color: inherit;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 4px var(--surface);
+    }
+
+    button[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 3px; }
+    .swatch-white { background: var(--text); }
+    .swatch-cyan { background: var(--cyan); }
+    .swatch-green { background: var(--green); }
+    .swatch-gradient { background: linear-gradient(135deg, var(--cyan), var(--green)); }
+
+    input[type="range"] { accent-color: var(--green); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 22px;
+      padding: 12px 0 76px;
+    }
+
+    .card {
+      position: relative;
+      overflow: hidden;
+      min-height: 500px;
+      border: 1px solid var(--outline);
+      border-radius: 26px;
+      background: rgba(16, 27, 30, .82);
+      transition: transform .55s cubic-bezier(.16,1,.3,1), border-color .35s ease;
+    }
+
+    .card:hover { transform: translateY(-6px); border-color: rgba(83, 215, 244, .52); }
+
+    .stage {
+      position: relative;
+      display: grid;
+      height: 300px;
+      place-items: center;
+      overflow: hidden;
+      color: var(--mark);
+      background:
+        radial-gradient(circle at center, rgba(83,215,244,.09), transparent 54%),
+        #071012;
+    }
+
+    .card:nth-child(even) .stage {
+      background:
+        radial-gradient(circle at center, rgba(184,242,90,.08), transparent 54%),
+        #f1f6f2;
+    }
+
+    .card:nth-child(even) .stage:not(.gradient-active) { color: #071012; }
+
+    .stage::after {
+      position: absolute;
+      width: 168px;
+      height: 168px;
+      border: 1px solid currentColor;
+      border-radius: 34%;
+      content: "";
+      opacity: .08;
+    }
+
+    .logo {
+      z-index: 1;
+      width: var(--logo-size);
+      height: var(--logo-size);
+      filter: drop-shadow(0 10px 26px rgba(0,0,0,.22));
+      transition: width .25s ease, height .25s ease, transform .55s cubic-bezier(.16,1,.3,1);
+    }
+
+    .card:hover .logo { transform: scale(1.04); }
+
+    .gradient-active .logo .paint-fill,
+    .gradient-active .logo .paint-fill * { fill: url(#brand-gradient); }
+
+    .gradient-active .logo .paint-stroke,
+    .gradient-active .logo .paint-stroke * { stroke: url(#brand-gradient); }
+
+    .copy { padding: 24px 25px 28px; }
+    .index { color: var(--cyan); }
+    h2 { margin: 9px 0 4px; font-size: 24px; font-weight: 540; letter-spacing: -.02em; }
+    .meta { color: var(--muted); }
+    .rationale { margin: 18px 0 0; color: #c5d0cd; font-size: 14px; line-height: 1.7; }
+
+    .micro-test {
+      position: absolute;
+      right: 18px;
+      bottom: 18px;
+      display: grid;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 12px;
+      color: var(--mark);
+      background: #071012;
+    }
+
+    .micro-test svg { width: 20px; height: 20px; }
+
+    .lockup {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 78px;
+      padding: 34px;
+      border: 1px solid var(--outline);
+      border-radius: 26px;
+      background: var(--surface-high);
+    }
+
+    .lockup svg { width: 72px; height: 72px; color: var(--green); }
+    .lockup strong { display: block; font-size: clamp(32px, 6vw, 58px); letter-spacing: -.055em; }
+    .lockup span { color: var(--muted); }
+
+    footer { padding: 0 0 52px; color: var(--muted); }
+
+    @media (max-width: 920px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 620px) {
+      header { padding-top: 48px; }
+      .grid { grid-template-columns: 1fr; }
+      .card { min-height: 460px; }
+      .stage { height: 270px; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <defs>
+      <linearGradient id="brand-gradient" x1="18" y1="18" x2="82" y2="82" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#53d7f4"/>
+        <stop offset="1" stop-color="#b8f25a"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <header>
+    <div class="eyebrow">Logo redesign / round 01 / 2026</div>
+    <h1>HyperPower</h1>
+    <p class="tagline">六个从“实时遥测 × 计算核心 × 能量效率”出发的图形方向。保留青绿品牌资产，重新建立更简洁、可缩放、可主题化的识别系统。</p>
+    <div class="controls" aria-label="Preview controls">
+      <div class="control">
+        <span class="control-label">Color</span>
+        <button class="swatch-white" data-color="#f0f6f4" aria-label="White" aria-pressed="true"></button>
+        <button class="swatch-cyan" data-color="#53d7f4" aria-label="Cyan" aria-pressed="false"></button>
+        <button class="swatch-green" data-color="#b8f25a" aria-label="Green" aria-pressed="false"></button>
+        <button class="swatch-gradient" data-color="gradient" aria-label="Brand gradient" aria-pressed="false"></button>
+      </div>
+      <div class="control">
+        <label class="control-label" for="size">Scale</label>
+        <input id="size" type="range" min="56" max="170" value="132" />
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="grid" aria-label="Logo concepts">
+      <article class="card">
+        <div class="stage">
+          <svg class="logo" viewBox="0 0 100 100" aria-label="Hyperframe logo">
+            <g class="paint-fill" fill="currentColor"><rect x="20" y="18" width="16" height="64" rx="8"/><rect x="64" y="18" width="16" height="64" rx="8"/><path d="M31 47h10.5l7.2-10.8a6 6 0 0 1 10.5 1.1L65.5 53H70v14H61a7 7 0 0 1-6.5-4.4l-2.9-7.3-2.3 3.5A7 7 0 0 1 43.5 62H31Z"/></g>
+          </svg>
+          <div class="micro-test"><svg viewBox="0 0 100 100"><g fill="currentColor"><rect x="20" y="18" width="16" height="64" rx="8"/><rect x="64" y="18" width="16" height="64" rx="8"/><path d="M31 47h10.5l7.2-10.8a6 6 0 0 1 10.5 1.1L65.5 53H70v14H61a7 7 0 0 1-6.5-4.4l-2.9-7.3-2.3 3.5A7 7 0 0 1 43.5 62H31Z"/></g></svg></div>
+        </div>
+        <div class="copy"><span class="index">01 / Recommended</span><h2>Hyperframe</h2><span class="meta">Pure geometry · Bold</span><p class="rationale">H 的横梁被实时功率曲线取代：名称识别与产品功能合为一个符号。轮廓厚、结构稳，是启动器图标和通知图标的首选。</p></div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <svg class="logo" viewBox="0 0 100 100" aria-label="H Array logo">
+            <defs><rect id="c2" width="13" height="13" rx="4" fill="currentColor"/></defs>
+            <g class="paint-fill"><use href="#c2" x="20" y="18"/><use href="#c2" x="20" y="35"/><use href="#c2" x="20" y="52"/><use href="#c2" x="20" y="69"/><use href="#c2" x="67" y="18"/><use href="#c2" x="67" y="35"/><use href="#c2" x="67" y="52"/><use href="#c2" x="67" y="69"/><rect x="37" y="43.5" width="26" height="13" rx="4" fill="currentColor"/><rect x="70" y="12" width="20" height="9" rx="4.5" fill="currentColor" opacity=".52" transform="rotate(-28 80 16.5)"/></g>
+          </svg>
+          <div class="micro-test"><svg viewBox="0 0 100 100"><g fill="currentColor"><rect x="20" y="18" width="13" height="64" rx="5"/><rect x="67" y="18" width="13" height="64" rx="5"/><rect x="33" y="44" width="34" height="12" rx="4"/></g></svg></div>
+        </div>
+        <div class="copy"><span class="index">02 / Modular</span><h2>H Array</h2><span class="meta">Dot matrix · Asymmetric</span><p class="rationale">模块阵列对应多核 CPU 和分层指标；右上逸出的胶囊像一个突破限制的超大核。最具数字产品感，也最适合动效。</p></div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <svg class="logo" viewBox="0 0 100 100" aria-label="Live Trace logo">
+            <path class="paint-stroke" d="M24 22v56M76 22v56M24 55h13l9-19 10 31 8-18h12" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div class="micro-test"><svg viewBox="0 0 100 100"><path d="M24 22v56M76 22v56M24 55h13l9-19 10 31 8-18h12" fill="none" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="copy"><span class="index">03 / Familiar</span><h2>Live Trace</h2><span class="meta">Line system · Monoline</span><p class="rationale">保留旧标最有效的实时曲线，但删去装饰性芯片引脚，让它直接构成 H。认知迁移成本最低，适合温和换标。</p></div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <svg class="logo" viewBox="0 0 100 100" aria-label="Core Aperture logo">
+            <defs><mask id="a4"><rect width="100" height="100" fill="black"/><circle cx="50" cy="50" r="34" fill="white"/><rect x="30" y="31" width="11" height="38" rx="5.5" fill="black"/><rect x="59" y="31" width="11" height="38" rx="5.5" fill="black"/><rect x="37" y="44.5" width="26" height="11" rx="5.5" fill="black"/><circle cx="72" cy="27" r="5" fill="black"/></mask></defs>
+            <circle class="paint-fill" cx="50" cy="50" r="34" fill="currentColor" mask="url(#a4)"/>
+          </svg>
+          <div class="micro-test"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="34" fill="currentColor"/></svg></div>
+        </div>
+        <div class="copy"><span class="index">04 / Premium</span><h2>Core Aperture</h2><span class="meta">Negative space · Dense</span><p class="rationale">用减法让 H 出现在实体“核心”里，右上小孔代表采样点与状态灯。大色块在主题图标和小尺寸下非常稳定。</p></div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <svg class="logo" viewBox="0 0 100 100" aria-label="Torque Ring logo">
+            <g class="paint-stroke" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"><path d="M29 24a32 32 0 0 1 42 0"/><path d="M78 34a32 32 0 0 1-7 42" opacity=".56"/><path d="M65 81a32 32 0 0 1-45-17"/></g><path class="paint-fill" d="M55 24 35 53h13l-3 24 21-33H53Z" fill="currentColor"/>
+          </svg>
+          <div class="micro-test"><svg viewBox="0 0 100 100"><path d="M29 24a32 32 0 1 1-9 40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><path d="M55 24 35 53h13l-3 24 21-33H53Z" fill="currentColor"/></svg></div>
+        </div>
+        <div class="copy"><span class="index">05 / Immediate</span><h2>Torque Ring</h2><span class="meta">Geometry + lines · Kinetic</span><p class="rationale">不依赖字母，直接把“性能表盘”和“能量”组合。传播理解最快，适合作为性能工具，但品牌名称的独占性略弱。</p></div>
+      </article>
+
+      <article class="card">
+        <div class="stage">
+          <svg class="logo" viewBox="0 0 100 100" aria-label="Core Topology logo">
+            <g class="paint-stroke" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M25 27v46M75 27v46M25 50h18M57 50h18" opacity=".58"/><path d="M28 28 47 47M72 28 53 47M28 72l19-19M72 72 53 53"/></g><g class="paint-fill" fill="currentColor"><circle cx="25" cy="27" r="7"/><circle cx="25" cy="73" r="7"/><circle cx="75" cy="27" r="7"/><circle cx="75" cy="73" r="7"/><rect x="41" y="41" width="18" height="18" rx="6"/></g>
+          </svg>
+          <div class="micro-test"><svg viewBox="0 0 100 100"><path d="M28 28 50 50 72 28M28 72 50 50 72 72" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><circle cx="50" cy="50" r="11" fill="currentColor"/></svg></div>
+        </div>
+        <div class="copy"><span class="index">06 / Systemic</span><h2>Core Topology</h2><span class="meta">Node network · Layered</span><p class="rationale">效率核、性能核与超大核汇入中央采样核心，表达“深入系统读取并汇总”。概念最完整，适合面向硬件玩家的品牌语境。</p></div>
+      </article>
+    </section>
+
+    <section class="lockup" aria-label="Recommended lockup">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><g fill="currentColor"><rect x="20" y="18" width="16" height="64" rx="8"/><rect x="64" y="18" width="16" height="64" rx="8"/><path d="M31 47h10.5l7.2-10.8a6 6 0 0 1 10.5 1.1L65.5 53H70v14H61a7 7 0 0 1-6.5-4.4l-2.9-7.3-2.3 3.5A7 7 0 0 1 43.5 62H31Z"/></g></svg>
+      <div><strong>HyperPower</strong><span>Real-time device telemetry</span></div>
+    </section>
+  </main>
+
+  <footer>Generated with Logo Generator · Editable SVG · currentColor ready</footer>
+
+  <script>
+    const root = document.documentElement;
+    const stages = [...document.querySelectorAll('.stage')];
+    document.querySelectorAll('button[data-color]').forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('button[data-color]').forEach((item) => item.setAttribute('aria-pressed', 'false'));
+        button.setAttribute('aria-pressed', 'true');
+        const color = button.dataset.color;
+        stages.forEach((stage) => stage.classList.toggle('gradient-active', color === 'gradient'));
+        if (color !== 'gradient') root.style.setProperty('--mark', color);
+      });
+    });
+    document.querySelector('#size').addEventListener('input', (event) => {
+      root.style.setProperty('--logo-size', `${event.target.value}px`);
+    });
+  </script>
+</body>
+</html>

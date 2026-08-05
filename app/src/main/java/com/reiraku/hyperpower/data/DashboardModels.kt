@@ -39,6 +39,11 @@ data class CpuLoadSample(
     val usage: Float,
 )
 
+data class ChargePowerSample(
+    val timestampMillis: Long,
+    val powerWatts: Double,
+)
+
 internal fun updateCpuLoadHistory(
     history: List<CpuLoadSample>,
     usage: Float?,
@@ -57,6 +62,23 @@ internal fun updateCpuLoadHistory(
     return updated.takeLast(MAX_CPU_LOAD_HISTORY_SAMPLES)
 }
 
+internal fun updateChargePowerHistory(
+    history: List<ChargePowerSample>,
+    wasCharging: Boolean,
+    isCharging: Boolean,
+    powerWatts: Double?,
+    nowMillis: Long,
+): List<ChargePowerSample> {
+    if (!isCharging) return history
+
+    val sessionHistory = if (wasCharging) history else emptyList()
+    val cutoff = nowMillis - CHARGE_POWER_HISTORY_WINDOW_MILLIS
+    val retained = sessionHistory.filter { it.timestampMillis >= cutoff }
+    val power = powerWatts?.takeIf { it.isFinite() && it >= 0.0 } ?: return retained
+    return (retained + ChargePowerSample(nowMillis, power))
+        .takeLast(MAX_CHARGE_POWER_HISTORY_SAMPLES)
+}
+
 data class BatteryMetrics(
     val levelPercent: Int? = null,
     val voltageMv: Int? = null,
@@ -72,6 +94,27 @@ data class BatteryMetrics(
             val current = currentUa ?: return null
             val voltage = voltageMv ?: return null
             return kotlin.math.abs(current.toDouble()) * voltage.toDouble() / 1_000_000_000.0
+    }
+}
+
+data class MemoryMetrics(
+    val totalBytes: Long? = null,
+    val availableBytes: Long? = null,
+    val lowMemoryThresholdBytes: Long? = null,
+    val isLowMemory: Boolean = false,
+) {
+    val usedBytes: Long?
+        get() {
+            val total = totalBytes ?: return null
+            val available = availableBytes ?: return null
+            return (total - available).coerceIn(0L, total)
+        }
+
+    val usage: Float?
+        get() {
+            val total = totalBytes?.takeIf { it > 0L } ?: return null
+            val used = usedBytes ?: return null
+            return (used.toDouble() / total.toDouble()).toFloat().coerceIn(0f, 1f)
         }
 }
 
@@ -93,11 +136,15 @@ enum class CpuAccessStatus {
 data class DashboardState(
     val cpu: CpuMetrics = CpuMetrics(),
     val cpuLoadHistory: List<CpuLoadSample> = emptyList(),
+    val chargePowerHistory: List<ChargePowerSample> = emptyList(),
     val battery: BatteryMetrics = BatteryMetrics(),
+    val memory: MemoryMetrics = MemoryMetrics(),
     val cpuAccessMode: CpuAccessMode = CpuAccessMode.SHIZUKU,
     val cpuAccessStatus: CpuAccessStatus = CpuAccessStatus.CHECKING,
     val updatedAtMillis: Long = System.currentTimeMillis(),
 )
 
 const val CPU_LOAD_HISTORY_WINDOW_MILLIS = 30_000L
+const val CHARGE_POWER_HISTORY_WINDOW_MILLIS = 5L * 60L * 1_000L
 private const val MAX_CPU_LOAD_HISTORY_SAMPLES = 120
+private const val MAX_CHARGE_POWER_HISTORY_SAMPLES = 600

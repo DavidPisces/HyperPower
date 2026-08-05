@@ -41,7 +41,10 @@ class BatteryReader(context: Context) {
             voltageMv = intent
                 ?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
                 ?.takeIf { it > 0 },
-            currentUa = currentNow,
+            currentUa = normalizeBatteryCurrent(
+                currentUa = currentNow,
+                isCharging = isCharging,
+            ),
             chargeUah = charge,
             estimatedRemainingMillis = if (isCharging) {
                 null
@@ -83,5 +86,15 @@ class BatteryReader(context: Context) {
 
     private companion object {
         const val MAX_REASONABLE_ESTIMATE_MILLIS = 10L * 24L * 60L * 60L * 1_000L
+    }
+}
+
+internal fun normalizeBatteryCurrent(currentUa: Long?, isCharging: Boolean): Long? {
+    currentUa ?: return null
+    if (currentUa == Long.MIN_VALUE) return null
+    return when {
+        currentUa == 0L -> 0L
+        isCharging -> kotlin.math.abs(currentUa)
+        else -> -kotlin.math.abs(currentUa)
     }
 }

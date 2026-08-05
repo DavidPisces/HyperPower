@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Live Trace</title>
+  <desc id="desc">A restrained monoline H contains a live performance trace.</desc>
+  <path d="M24 22v56M76 22v56M24 55h13l9-19 10 31 8-18h12"
+        fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

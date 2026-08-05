@@ -9,8 +9,13 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 /.idea/deploymentTargetSelector.xml
+/.idea/vcs.xml
 .DS_Store
 /build
+/app/release/
+/artwork/**/previews/
+/artwork/**/qa/
+/artwork/**/render/
 /captures
 .externalNativeBuild
 .cxx
