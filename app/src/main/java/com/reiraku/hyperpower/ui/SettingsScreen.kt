@@ -1,5 +1,6 @@
 package com.reiraku.hyperpower.ui
 
+import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -82,6 +83,10 @@ fun SettingsScreen(
     var notificationMode by remember {
         mutableStateOf(MonitorNotificationPreferences.getMode(context))
     }
+    var metricStyleEnabled by remember {
+        mutableStateOf(MonitorNotificationPreferences.isMetricStyleEnabled(context))
+    }
+    val supportsMetricStyle = Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN
     var superIslandSupported by remember { mutableStateOf(false) }
     var superIslandSupportChecked by remember { mutableStateOf(false) }
 
@@ -233,6 +238,35 @@ fun SettingsScreen(
                         title = "超级岛设置",
                         summary = "自定义摘要态左右数据",
                         onClick = onOpenSuperIslandSettings,
+                    )
+                }
+
+                // 只有"实时通知"模式会用到 MetricStyle；小米超级岛走自己的 JSON 模板。
+                val showsNativeStyleOption = superIslandSupportChecked &&
+                    (!superIslandSupported || notificationMode == MonitorNotificationMode.NATIVE)
+                if (showsNativeStyleOption) {
+                    BasicComponent(
+                        title = "使用 MetricStyle",
+                        summary = if (supportsMetricStyle) {
+                            "以指标卡片展示功耗、电流、CPU 等数据"
+                        } else {
+                            "需要 Android 17 及以上，当前系统显示为文字"
+                        },
+                        enabled = supportsMetricStyle,
+                        endActions = {
+                            Switch(
+                                checked = supportsMetricStyle && metricStyleEnabled,
+                                onCheckedChange = { enabled ->
+                                    metricStyleEnabled = enabled
+                                    MonitorNotificationPreferences.setMetricStyleEnabled(
+                                        context,
+                                        enabled,
+                                    )
+                                    PowerMonitorService.refresh(context)
+                                },
+                                enabled = supportsMetricStyle,
+                            )
+                        },
                     )
                 }
 

@@ -53,6 +53,7 @@ object MonitorNotificationPreferences {
     private const val LIVE_PRIMARY_METRIC_KEY = "live_primary_metric"
     private const val LIVE_SECONDARY_METRIC_KEY = "live_secondary_metric"
     private const val LIVE_TERTIARY_METRIC_KEY = "live_tertiary_metric"
+    private const val METRIC_STYLE_KEY = "metric_style_enabled"
 
     fun isEnabled(context: Context): Boolean =
         preferences(context).getBoolean(ENABLED_KEY, true)
@@ -120,6 +121,19 @@ object MonitorNotificationPreferences {
             putString(LIVE_SECONDARY_METRIC_KEY, layout.secondary.storedValue)
             putString(LIVE_TERTIARY_METRIC_KEY, layout.tertiary.storedValue)
         }
+    }
+
+    /**
+     * 实时通知是否使用 MetricStyle 结构化指标展示，默认开启。
+     *
+     * 仅在 Android 17（API 37）及以上生效；低版本平台没有该模板，
+     * [PowerMonitorNotification] 会自动退化为 content 文字展示。
+     */
+    fun isMetricStyleEnabled(context: Context): Boolean =
+        preferences(context).getBoolean(METRIC_STYLE_KEY, true)
+
+    fun setMetricStyleEnabled(context: Context, enabled: Boolean) {
+        preferences(context).edit { putBoolean(METRIC_STYLE_KEY, enabled) }
     }
 
     fun wasPermissionPrompted(context: Context): Boolean =
