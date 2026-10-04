@@ -327,19 +327,15 @@ class DashboardMonitor(context: Context) : AutoCloseable {
             it.source == snapshot.source && it.coreCount == snapshot.coreCount
         }?.let { return it.identities }
 
-        val identities = if (snapshot.source == CpuIdentitySource.ROOT) {
-            RootCpuReader.readProfile(snapshot.coreCount)?.let { profile ->
-                CpuArchitectureDetector.detect(
-                    coreCount = snapshot.coreCount,
-                    midrs = profile.midrs,
-                    cpuInfo = profile.cpuInfo,
-                    capacities = profile.capacities,
-                    maxFrequenciesKhz = profile.maxFrequenciesKhz,
-                )
-            } ?: unknownCpuIdentities(snapshot.coreCount)
-        } else {
-            unknownCpuIdentities(snapshot.coreCount)
-        }
+        val identities = readCpuProfile(snapshot)?.let { profile ->
+            CpuArchitectureDetector.detect(
+                coreCount = snapshot.coreCount,
+                midrs = profile.midrs,
+                cpuInfo = profile.cpuInfo,
+                capacities = profile.capacities,
+                maxFrequenciesKhz = profile.maxFrequenciesKhz,
+            )
+        } ?: unknownCpuIdentities(snapshot.coreCount)
 
         identityCache = CpuIdentityCache(
             source = snapshot.source,
@@ -347,6 +343,54 @@ class DashboardMonitor(context: Context) : AutoCloseable {
             identities = identities,
         )
         return identities
+    }
+
+    /**
+     * 采集身份识别所需的原始数据。
+     *
+     * 三条路径都尽量给出可用的 [CpuProfile]：
+     * - ROOT：`su` 一次读全，失败时退回应用直读；
+     * - SHIZUKU：特权进程读（能拿到应用直读不到的内容），再用应用直读补齐缺口；
+     * - DIRECT：应用直读 sysfs（`cpu_capacity` / `cpuinfo_max_freq` 通常无需权限）。
+     *
+     * 都没有可用读数时返回 null，调用方给出全 UNKNOWN —— UI 不展示任何角色标签。
+     */
+    private fun readCpuProfile(snapshot: CpuSnapshot): CpuProfile? = when (snapshot.source) {
+        CpuIdentitySource.ROOT -> {
+            val local = readLocalCpuProfile(snapshot.coreCount)
+            RootCpuReader.readProfile(snapshot.coreCount)?.mergedWith(local) ?: local
+        }
+
+        CpuIdentitySource.SHIZUKU -> {
+            val local = readLocalCpuProfile(snapshot.coreCount)
+            val privileged = privilegedService?.let { service ->
+                readPrivilegedCpuProfile(service, snapshot.coreCount)
+            }
+            privileged?.mergedWith(local) ?: local
+        }
+
+        CpuIdentitySource.DIRECT -> readLocalCpuProfile(snapshot.coreCount)
+    }
+
+    private fun readLocalCpuProfile(coreCount: Int) = CpuProfile(
+        midrs = LinuxCpuReader.readCoreMidrs(coreCount),
+        cpuInfo = LinuxCpuReader.readCpuInfo(),
+        capacities = LinuxCpuReader.readCoreCapacities(coreCount),
+        maxFrequenciesKhz = LinuxCpuReader.readCoreMaxFrequencies(coreCount),
+    )
+
+    private fun readPrivilegedCpuProfile(
+        service: IPrivilegedMonitor,
+        coreCount: Int,
+    ): CpuProfile? = try {
+        CpuProfile(
+            midrs = service.readCoreMidrs(coreCount),
+            cpuInfo = service.readCpuInfo(),
+            capacities = service.readCoreCapacities(coreCount),
+            maxFrequenciesKhz = service.readCoreMaxFrequencies(coreCount),
+        )
+    } catch (_: RemoteException) {
+        null
     }
 
     private fun unknownCpuIdentities(coreCount: Int): List<CpuIdentity> =

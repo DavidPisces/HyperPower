@@ -6,6 +6,30 @@ data class CpuIdentity(
     val rawIdentifier: String? = null,
 )
 
+/**
+ * 一次身份识别所需的原始数据。
+ *
+ * 来源可以是 Root（`su` 读取）、Shizuku（特权进程读取）或应用直读 sysfs —— 三者结构一致，
+ * 便于用 [mergedWith] 互补：例如特权进程读不到 `cpu_capacity` 时用应用直读的那份补齐。
+ */
+internal data class CpuProfile(
+    val midrs: Array<String>,
+    val cpuInfo: String,
+    val capacities: LongArray,
+    val maxFrequenciesKhz: LongArray,
+) {
+    fun mergedWith(fallback: CpuProfile): CpuProfile = CpuProfile(
+        midrs = if (midrs.any { it.isNotBlank() }) midrs else fallback.midrs,
+        cpuInfo = cpuInfo.ifBlank { fallback.cpuInfo },
+        capacities = if (capacities.any { it > 0L }) capacities else fallback.capacities,
+        maxFrequenciesKhz = if (maxFrequenciesKhz.any { it > 0L }) {
+            maxFrequenciesKhz
+        } else {
+            fallback.maxFrequenciesKhz
+        },
+    )
+}
+
 internal object CpuArchitectureDetector {
     fun detect(
         coreCount: Int,
@@ -15,64 +39,140 @@ internal object CpuArchitectureDetector {
         maxFrequenciesKhz: LongArray,
     ): List<CpuIdentity> {
         val cpuInfoCores = parseCpuInfo(cpuInfo)
-        val identities = List(coreCount) { core ->
+        val fields = List(coreCount) { core ->
             val midrFields = parseMidr(midrs.getOrNull(core))
             val cpuInfoFields = cpuInfoCores[core]
-            val implementer = midrFields?.implementer ?: cpuInfoFields?.implementer
-            val part = midrFields?.part ?: cpuInfoFields?.part
-            val known = knownCore(implementer, part)
-            val rawIdentifier = rawIdentifier(implementer, part)
-            CpuIdentity(
-                architecture = known?.architecture
-                    ?: cpuInfoFields?.modelName?.takeIf(::isUsefulModelName)
-                    ?: null,
-                role = known?.role ?: CpuCoreRole.UNKNOWN,
-                rawIdentifier = rawIdentifier,
+            CoreFields(
+                implementer = midrFields?.implementer ?: cpuInfoFields?.implementer,
+                part = midrFields?.part ?: cpuInfoFields?.part,
+                modelName = cpuInfoFields?.modelName,
             )
         }
-
-        val inferredRoles = inferRoles(
+        val known = fields.map { knownCore(it.implementer, it.part) }
+        val clusterRoles = resolveClusterRoles(
             coreCount = coreCount,
+            known = known,
             capacities = capacities,
             maxFrequenciesKhz = maxFrequenciesKhz,
         )
-        return identities.mapIndexed { index, identity ->
-            if (identity.role == CpuCoreRole.UNKNOWN) {
-                identity.copy(role = inferredRoles.getOrElse(index) { CpuCoreRole.UNKNOWN })
-            } else {
-                identity
-            }
+
+        return List(coreCount) { core ->
+            CpuIdentity(
+                architecture = known[core]?.architecture
+                    ?: fields[core].modelName?.takeIf(::isUsefulModelName),
+                // 簇结构优先；判不出来时退回型号表；再判不出来就保持 UNKNOWN（UI 不展示标签）。
+                role = clusterRoles[core]
+                    ?: known[core]?.role
+                    ?: CpuCoreRole.UNKNOWN,
+                rawIdentifier = rawIdentifier(fields[core].implementer, fields[core].part),
+            )
         }
     }
 
-    private fun inferRoles(
+    /**
+     * 角色由**簇结构**决定，核心型号只负责命名。
+     *
+     * 过去是"型号命中就静态定角色"，同一个 part 出现在多个簇时会出错：1+3+4 的 SoC
+     * （prime 与 gold 同为 Cortex-A76/A77/A78）会把 prime 核也标成性能核。
+     *
+     * 分簇优先用调度器容量 `cpu_capacity`（同簇取值相同），容量读不到时退化为最高频率；
+     * 相邻取值相对差在 [CLUSTER_TOLERANCE_PERCENT]% 以内视为同一簇，避免同簇核因逐核微差被拆开。
+     * 返回 null 表示该核无法判定，由调用方回退到型号表。
+     */
+    private fun resolveClusterRoles(
+        coreCount: Int,
+        known: List<KnownCore?>,
+        capacities: LongArray,
+        maxFrequenciesKhz: LongArray,
+    ): List<CpuCoreRole?> {
+        val scores = scoresFor(coreCount, capacities, maxFrequenciesKhz)
+            ?: return List(coreCount) { null }
+
+        // 全部核心同型号的同构 SoC 没有大小核之分，直接标为通用核。
+        val architectures = known.map { it?.architecture }
+        if (scores.all { it != null } &&
+            architectures.all { it != null } &&
+            architectures.distinct().size == 1
+        ) {
+            return List(coreCount) { CpuCoreRole.GENERAL }
+        }
+
+        val clusters = clusterByScore(scores)
+        if (clusters.isEmpty()) return List(coreCount) { null }
+
+        val roles = MutableList<CpuCoreRole?>(coreCount) { null }
+        if (clusters.size == 1) {
+            clusters.first().forEach { roles[it] = CpuCoreRole.GENERAL }
+            return roles
+        }
+
+        clusters.first().forEach { roles[it] = CpuCoreRole.EFFICIENCY }
+        for (index in 1 until clusters.lastIndex) {
+            clusters[index].forEach { roles[it] = CpuCoreRole.PERFORMANCE }
+        }
+        val topCluster = clusters.last()
+        val topRole = if (isPrimeCluster(topCluster, clusters.size, known)) {
+            CpuCoreRole.ULTRA
+        } else {
+            CpuCoreRole.PERFORMANCE
+        }
+        topCluster.forEach { roles[it] = topRole }
+        return roles
+    }
+
+    /** 每个核心的簇评分：优先容量，容量全读不到时用最高频率；读不到的核保持 null。 */
+    private fun scoresFor(
         coreCount: Int,
         capacities: LongArray,
         maxFrequenciesKhz: LongArray,
-    ): List<CpuCoreRole> {
-        val capacityScores = List(coreCount) { capacities.getOrElse(it) { 0L } }
-        val frequencyScores = List(coreCount) { maxFrequenciesKhz.getOrElse(it) { 0L } }
-        val scores = when {
-            capacityScores.count { it > 0L } == coreCount -> capacityScores
-            frequencyScores.count { it > 0L } == coreCount -> frequencyScores
-            else -> return List(coreCount) { CpuCoreRole.UNKNOWN }
+    ): List<Long?>? {
+        val capacityScores = List(coreCount) { core ->
+            capacities.getOrElse(core) { 0L }.takeIf { it > 0L }
         }
-        val clusters = scores.distinct().sorted()
-        return when (clusters.size) {
-            0 -> List(coreCount) { CpuCoreRole.UNKNOWN }
-            1 -> List(coreCount) { CpuCoreRole.GENERAL }
-            2 -> scores.map { score ->
-                if (score == clusters.first()) CpuCoreRole.EFFICIENCY
-                else CpuCoreRole.PERFORMANCE
-            }
-            else -> scores.map { score ->
-                when (score) {
-                    clusters.first() -> CpuCoreRole.EFFICIENCY
-                    clusters.last() -> CpuCoreRole.ULTRA
-                    else -> CpuCoreRole.PERFORMANCE
+        if (capacityScores.any { it != null }) return capacityScores
+
+        val frequencyScores = List(coreCount) { core ->
+            maxFrequenciesKhz.getOrElse(core) { 0L }.takeIf { it > 0L }
+        }
+        return frequencyScores.takeIf { scores -> scores.any { it != null } }
+    }
+
+    /** 按评分升序分簇，返回每个簇的核心下标。 */
+    private fun clusterByScore(scores: List<Long?>): List<List<Int>> {
+        val clusters = mutableListOf<MutableList<Int>>()
+        var clusterMax = 0L
+        scores.withIndex()
+            .filter { it.value != null }
+            .sortedBy { it.value }
+            .forEach { (index, value) ->
+                val score = value ?: return@forEach
+                val newCluster = clusters.isEmpty() ||
+                    score * 100L > clusterMax * (100L + CLUSTER_TOLERANCE_PERCENT)
+                if (newCluster) {
+                    clusters += mutableListOf(index)
+                    clusterMax = score
+                } else {
+                    clusters.last() += index
+                    clusterMax = maxOf(clusterMax, score)
                 }
             }
-        }
+        return clusters
+    }
+
+    /**
+     * 顶簇是否是超大核：
+     * - 顶簇里有 X 系型号（型号表里角色即 ULTRA）时成立；
+     * - 或者存在中间簇、且顶簇只有 1~2 个核心（1+3+4 / 1+2+4 这类 prime 结构）。
+     *
+     * 只有两个簇时（例如 2+6 的 SoC）不判超大核，避免把"大核"误标成"超大核"。
+     */
+    private fun isPrimeCluster(
+        topCluster: List<Int>,
+        clusterCount: Int,
+        known: List<KnownCore?>,
+    ): Boolean {
+        if (topCluster.any { known.getOrNull(it)?.role == CpuCoreRole.ULTRA }) return true
+        return clusterCount >= 3 && topCluster.size <= MAX_PRIME_CLUSTER_CORES
     }
 
     private fun parseMidr(raw: String?): CpuIdFields? {
@@ -132,6 +232,12 @@ internal object CpuArchitectureDetector {
             !lower.startsWith("aarch64 processor")
     }
 
+    private data class CoreFields(
+        val implementer: Int?,
+        val part: Int?,
+        val modelName: String?,
+    )
+
     private data class CpuIdFields(
         val implementer: Int,
         val part: Int,
@@ -149,6 +255,12 @@ internal object CpuArchitectureDetector {
     )
 
     private const val ARM_IMPLEMENTER = 0x41
+
+    /** 相邻容量/频率的相对差在这个百分比以内视为同一簇。 */
+    private const val CLUSTER_TOLERANCE_PERCENT = 10L
+
+    /** 顶簇核心数不超过该值且存在中间簇时，按超大核处理。 */
+    private const val MAX_PRIME_CLUSTER_CORES = 2
 
     private val IMPLEMENTERS = mapOf(
         0x41 to "ARM",
@@ -173,7 +285,7 @@ internal object CpuArchitectureDetector {
         0xD03 to KnownCore("Cortex-A53", CpuCoreRole.EFFICIENCY),
         0xD04 to KnownCore("Cortex-A35", CpuCoreRole.EFFICIENCY),
         0xD05 to KnownCore("Cortex-A55", CpuCoreRole.EFFICIENCY),
-        0xD06 to KnownCore("Cortex-A65", CpuCoreRole.PERFORMANCE),
+        0xD06 to KnownCore("Cortex-A65", CpuCoreRole.EFFICIENCY),
         0xD07 to KnownCore("Cortex-A57", CpuCoreRole.PERFORMANCE),
         0xD08 to KnownCore("Cortex-A72", CpuCoreRole.PERFORMANCE),
         0xD09 to KnownCore("Cortex-A73", CpuCoreRole.PERFORMANCE),

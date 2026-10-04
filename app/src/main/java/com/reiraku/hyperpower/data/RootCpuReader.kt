@@ -15,13 +15,6 @@ internal data class RootCpuReadout(
     val frequenciesKhz: LongArray,
 )
 
-internal data class RootCpuProfile(
-    val midrs: Array<String>,
-    val cpuInfo: String,
-    val capacities: LongArray,
-    val maxFrequenciesKhz: LongArray,
-)
-
 /**
  * 所有命令都是应用内固定的只读命令，不接收外部输入。
  * 每次采样只启动一次 su，避免逐节点反复唤起 Root 管理器。
@@ -65,7 +58,7 @@ internal object RootCpuReader {
         )
     }
 
-    fun readProfile(coreCount: Int): RootCpuProfile? {
+    fun readProfile(coreCount: Int): CpuProfile? {
         val safeCoreCount = coreCount.coerceIn(1, MAX_CORES)
         val command = buildString {
             append("echo '$CPU_INFO_BEGIN'; cat /proc/cpuinfo; echo '$CPU_INFO_END'; ")
@@ -90,7 +83,7 @@ internal object RootCpuReader {
         val result = runRoot(command, ROOT_READ_TIMEOUT_SECONDS)
         if (result.exitCode != 0) return null
 
-        return RootCpuProfile(
+        return CpuProfile(
             midrs = Array(safeCoreCount) { core ->
                 result.output.taggedValue("$MIDR_PREFIX$core")
             },
